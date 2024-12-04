@@ -12,7 +12,7 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors({ origin: 'https://6750c76ed51fae2136536627--e-recruiter.netlify.app' })); // Adjust for your frontend URL
+app.use(cors({ origin: 'https://e-recruiter.netlify.app' })); // Adjust for your frontend URL
 app.use(express.json());
 
 // Serve static files from the 'uploads' directory
