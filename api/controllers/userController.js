@@ -63,6 +63,7 @@ exports.getUserByEmail = async (req, res) => {
 };
 
 // Create user
+// Create user
 exports.createUser = async (req, res) => {
   const { fullName, email, password, role } = req.body;
 
@@ -72,17 +73,32 @@ exports.createUser = async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ fullName, email, password: hashedPassword, role });
+    const status = role === 'employee' ? 'inactive' : 'active'; // Set status based on role
+
+    const newUser = new User({ fullName, email, password: hashedPassword, role, status });
     await newUser.save();
+
+    // If the role is employee, send a notification email
+    if (role === 'employee') {
+      await transporter.sendMail({
+        from: '"E-Recruiter" <dineshreddy2805@gmail.com>',
+        to: email,
+        subject: 'Account Activation Required',
+        text: `Dear ${fullName},\n\nYour account has been created but is currently inactive. Please contact your administrator to activate your account.\n\nThank you,\nE-Recruiter Team`,
+      });
+    }
+
     res.status(201).json({ message: 'User created successfully', user: newUser });
   } catch (error) {
     res.status(500).json({ message: 'User Already Exists', error: error.message });
   }
 };
 
+
+// Update user
 // Update user
 exports.updateUser = async (req, res) => {
-  const { email, fullName, password } = req.body;
+  const { email, fullName, password, status } = req.body;
 
   if (!email) {
     return res.status(400).json({ message: 'Email is required to update user.' });
@@ -96,6 +112,7 @@ exports.updateUser = async (req, res) => {
     if (password && password.length >= 8) {
       user.password = await bcrypt.hash(password, 10);
     }
+    if (status) user.status = status; // Ensure the status is updated
 
     await user.save();
     res.status(200).json({ message: 'User updated successfully', user });
@@ -103,6 +120,7 @@ exports.updateUser = async (req, res) => {
     res.status(500).json({ message: 'Error updating user', error: error.message });
   }
 };
+
 
 // Delete user
 exports.deleteUser = async (req, res) => {
@@ -123,6 +141,7 @@ exports.deleteUser = async (req, res) => {
 };
 
 // Create user with OTP verification for candidates
+// Create user with OTP verification for candidates
 exports.createCandidateWithOTP = async (req, res) => {
   const { fullName, email, password } = req.body;
 
@@ -131,50 +150,59 @@ exports.createCandidateWithOTP = async (req, res) => {
   }
 
   try {
-    // Check if the user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const otp = generateOTP();
 
-    // Create a new user with OTP
-    const newUser = new User({ fullName, email, password: hashedPassword, role: 'candidate', otp });
-    await newUser.save();
+    // Save OTP and hashed password temporarily
+    const otpRecord = { fullName, email, hashedPassword, otp };
 
     // Send OTP via email
     await transporter.sendMail({
-      from: '"E-Recruiter" <dineshreddy2805@gmail.com>',
+      from: '"E-Recruiter" <your-email@gmail.com>',
       to: email,
       subject: 'Your OTP for Signup Verification',
       text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
     });
 
-    res.status(201).json({ message: 'Candidate created successfully. Please verify OTP.', userId: newUser._id });
+    res.status(201).json({ message: 'OTP sent successfully', otpRecord });
   } catch (error) {
+    console.error('Error creating candidate:', error.message);
     res.status(500).json({ message: 'Error creating candidate', error: error.message });
   }
 };
 
-// Verify OTP and finalize user creation
+// Verify OTP and create candidate
+// Verify OTP and create candidate
 exports.verifyCandidateOTP = async (req, res) => {
-  const { userId, otp } = req.body;
+  const { otpRecord, otp } = req.body;
+
+  if (!otpRecord || !otp) {
+    return res.status(400).json({ message: 'OTP and OTP Record are required' });
+  }
 
   try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    // Ensure both OTPs are treated as strings for comparison
+    if (String(otpRecord.otp) !== String(otp)) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
 
-    if (user.otp !== otp) return res.status(400).json({ message: 'Invalid OTP' });
+    // Create user after OTP verification
+    const newUser = new User({
+      fullName: otpRecord.fullName,
+      email: otpRecord.email,
+      password: otpRecord.hashedPassword,
+      role: 'candidate',
+      status: 'active', // Default for candidate
+    });
 
-    // Finalize user creation (remove OTP field)
-    user.otp = undefined;
-    await user.save();
+    await newUser.save();
 
     res.status(200).json({ message: 'User verified and created successfully!' });
   } catch (error) {
+    console.error('Error verifying OTP:', error.message);
     res.status(500).json({ message: 'Error verifying OTP', error: error.message });
   }
-
 };
+
+
+

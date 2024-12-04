@@ -4,7 +4,6 @@ const candidateController = require('../controllers/candidateController');
 
 const router = express.Router();
 
-// Configure Multer for resume uploads
 const storage = multer.diskStorage({
   destination: './uploads/resume',
   filename: (req, file, cb) => {
@@ -14,11 +13,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Candidate Routes
 router.post('/', upload.single('resume'), candidateController.createCandidate);
 router.get('/', candidateController.getAllCandidates);
-router.get('/:id', candidateController.getCandidateById);
-router.put('/:id', upload.single('resume'), candidateController.updateCandidate);
-router.delete('/:id', candidateController.deleteCandidate);
+router.get('/:candidateId', candidateController.getCandidateById);
+router.put('/:candidateId', upload.single('resume'), candidateController.updateCandidate);
+router.delete('/:candidateId', candidateController.deleteCandidate);
 
 module.exports = router;

@@ -25,5 +25,5 @@ app.use('/user', userRoutes);
 app.use('/jobs', jobRoutes);
 app.use('/candidates', candidateRoutes);
 
-const PORT = process.env.PORT || 8002;
+const PORT = process.env.PORT || 8001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

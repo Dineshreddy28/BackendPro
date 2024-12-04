@@ -1,36 +1,50 @@
-const { v4: uuidv4 } = require('uuid');
 const candidateService = require('../services/candiateService');
-const jobService = require('../services/jobService');
 const nodemailer = require('nodemailer');
+const jobService = require('../services/jobService');
+const { v4: uuidv4 } = require('uuid');
 
-// Nodemailer setup
+// Create a new candidate
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false,
+  secure: false, // true for port 465, false for other ports
   auth: {
     user: 'dineshreddy2805@gmail.com',
     pass: 'ngjp zoex vsaw uxwb',
   },
 });
 
+// Helper function to send an email
+const sendEmail = async (recipientEmail, subject, text) => {
+  try {
+    await transporter.sendMail({
+      from: '"Recruiter System" <dineshreddy2805@gmail.com>',
+      to: recipientEmail,
+      subject,
+      text,
+    });
+    console.log(`Email sent to ${recipientEmail}`);
+  } catch (error) {
+    console.error('Error sending email:', error.message);
+  }
+};
+
 // Create a new candidate
 exports.createCandidate = async (req, res) => {
   const { firstName, lastName, mobileNo, email, jobId, stage } = req.body;
 
   if (!firstName || !lastName || !mobileNo || !email || !req.file || !jobId || !stage) {
-    return res.status(400).json({ message: 'All fields are required, including the resume and stage.' });
+    return res.status(400).json({ message: 'All fields are required, including the resume.' });
   }
 
   try {
-    // Fetch job details for email content
     const job = await jobService.getJobById(jobId);
     if (!job) {
-      return res.status(404).json({ message: 'Job posting not found' });
+      return res.status(404).json({ message: 'Job not found.' });
     }
 
     const candidateData = {
-      candidateId: uuidv4(), // Generate a unique candidateId
+      candidateId: uuidv4(),
       firstName,
       lastName,
       mobileNo,
@@ -42,20 +56,74 @@ exports.createCandidate = async (req, res) => {
 
     const candidate = await candidateService.createCandidate(candidateData);
 
-    // Send email to the candidate
-    const mailOptions = {
-      from: '"E-Recruiter" <dineshreddy2805@gmail.com>',
-      to: email,
-      subject: `Thank You for Applying for ${job.jobPostingName}`,
-      text: `Dear ${firstName} ${lastName},\n\nThank you for applying to the position of ${job.jobPostingName}. We have successfully received your application and resume. Our team will review your application, and you will be notified if you are shortlisted for further rounds.\n\nBest regards,\nRecruitment Team\nE-Recruiter`,
-    };
+    // Send email notification
+    const subject = 'Candidate Registration Successful';
+    const text = `Hello ${firstName} ${lastName},\n\nYou have been successfully registered for the job position: ${job.jobPostingName}.\n\nStage: ${stage}\n\nThank you,\nRecruiter System`;
+    await sendEmail(email, subject, text);
 
-    await transporter.sendMail(mailOptions);
-
-    res.status(201).json({ message: 'Candidate created successfully and email sent', candidate });
+    res.status(201).json({ message: 'Candidate created successfully', candidate });
   } catch (error) {
     console.error('Error creating candidate:', error.message);
     res.status(500).json({ message: 'Error creating candidate', error: error.message });
+  }
+};
+
+// Update candidate
+exports.updateCandidate = async (req, res) => {
+  const { candidateId } = req.params;
+  const { stage, interviewDate, interviewLocation } = req.body;
+  const updateData = { ...req.body };
+
+  if (req.file) {
+    updateData.resume = req.file.path;
+  }
+
+  try {
+    const updatedCandidate = await candidateService.updateCandidate(candidateId, updateData);
+    if (!updatedCandidate) {
+      return res.status(404).json({ message: 'Candidate not found.' });
+    }
+
+    // Send stage-specific email notifications
+    if (stage) {
+      let subject = '';
+      let text = '';
+
+      switch (stage.toLowerCase()) {
+        case 'shortlisted':
+          subject = 'Application Shortlisted';
+          text = `Hello ${updatedCandidate.firstName} ${updatedCandidate.lastName},\n\nCongratulations! Your application has been shortlisted for the job position.\n\nNext steps will be shared with you soon.\n\nThank you,\nRecruiter System`;
+          break;
+
+        case 'scheduled':
+          subject = 'Interview Scheduled';
+          text = `Hello ${updatedCandidate.firstName} ${updatedCandidate.lastName},\n\nYour interview has been scheduled.\n\nDetails:\n- Date: ${interviewDate}\n- Location: ${interviewLocation}\n\nPlease make sure to arrive on time.\n\nThank you,\nRecruiter System`;
+          break;
+
+        case 'selected':
+          subject = 'Congratulations! You Have Been Selected';
+          text = `Hello ${updatedCandidate.firstName} ${updatedCandidate.lastName},\n\nWe are thrilled to inform you that you have been selected for the job position.\n\nFurther details regarding the offer will be shared with you soon.\n\nThank you,\nRecruiter System`;
+          break;
+
+        case 'rejected':
+          subject = 'Application Status: Rejected';
+          text = `Hello ${updatedCandidate.firstName} ${updatedCandidate.lastName},\n\nWe regret to inform you that your application for the job position has been rejected at this time.\n\nThank you for applying and we encourage you to apply for future opportunities.\n\nBest regards,\nRecruiter System`;
+          break;
+
+        default:
+          console.log('No specific email content for the given stage.');
+          break;
+      }
+
+      if (subject && text) {
+        await sendEmail(updatedCandidate.email, subject, text);
+      }
+    }
+
+    res.status(200).json({ message: 'Candidate updated successfully', updatedCandidate });
+  } catch (error) {
+    console.error('Error updating candidate:', error.message);
+    res.status(500).json({ message: 'Error updating candidate', error: error.message });
   }
 };
 
@@ -86,34 +154,10 @@ exports.getCandidateById = async (req, res) => {
   }
 };
 
-// Update a candidate
-exports.updateCandidate = async (req, res) => {
-  const { candidateId } = req.params;
-  const { stage, review, reviewer, interviewDate, interviewLocation } = req.body;
+// Update a candidate by candidateId
 
-  const updateData = { stage };
-  if (review) updateData.review = review;
-  if (reviewer) updateData.reviewer = reviewer;
-  if (interviewDate) updateData.interviewDate = interviewDate;
-  if (interviewLocation) updateData.interviewLocation = interviewLocation;
 
-  if (req.file) {
-    updateData.resume = req.file.path; // Only update the resume if a new file is uploaded
-  }
-
-  try {
-    const candidate = await candidateService.updateCandidate(candidateId, updateData);
-    if (!candidate) {
-      return res.status(404).json({ message: 'Candidate not found' });
-    }
-    res.status(200).json({ message: 'Candidate updated successfully', candidate });
-  } catch (error) {
-    console.error('Error updating candidate:', error.message);
-    res.status(500).json({ message: 'Error updating candidate', error: error.message });
-  }
-};
-
-// Delete a candidate
+// Delete a candidate by candidateId
 exports.deleteCandidate = async (req, res) => {
   const { candidateId } = req.params;
 
