@@ -1,6 +1,6 @@
 {
  "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "nodemailer": "^6.9.16"
