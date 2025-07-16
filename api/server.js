@@ -12,7 +12,7 @@ const app = express();
 connectDB();
 
 // Middleware for CORS
-const allowedOrigins = ['https://e-recruiter.netlify.app'];
+const allowedOrigins = ['https://erecruiter.netlify.app'];
 
 app.use(
   cors({
