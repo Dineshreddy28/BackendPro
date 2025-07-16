@@ -12,20 +12,27 @@ const app = express();
 connectDB();
 
 // Middleware for CORS
-const allowedOrigins = ['https://e-recruiter.netlify.app']; // Add your Netlify app's URL here
+const allowedOrigins = ['https://e-recruiter.netlify.app'];
+
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, Postman, or same-origin)
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.error('Blocked by CORS:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
+    credentials: true, // If you're using cookies or auth headers
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Pre-flight requests
+app.options('*', cors());
 
 // Parse incoming JSON requests
 app.use(express.json());
@@ -39,7 +46,7 @@ app.use('/user', userRoutes);
 app.use('/jobs', jobRoutes);
 app.use('/candidates', candidateRoutes);
 
-// Handle Errors
+// Handle CORS errors
 app.use((err, req, res, next) => {
   if (err.message === 'Not allowed by CORS') {
     res.status(403).send({ message: err.message });
